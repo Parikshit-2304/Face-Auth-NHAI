@@ -56,7 +56,7 @@ export const Layout: React.FC<LayoutProps> = ({
           {/* NHAI Logo placeholder — swap src when bundling */}
           <div style={styles.logoBox}>
             <img
-              src="../src/assets/nhai-logo.png"
+              src="/nhai-logo.png"
               alt="NHAI"
               style={styles.logoImg}
               onError={(e) => {

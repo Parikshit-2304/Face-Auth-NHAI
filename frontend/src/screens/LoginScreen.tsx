@@ -112,7 +112,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         <div style={styles.brandSection}>
           <div style={styles.logoWrap}>
             <img
-              src="../src/assets/nhai-logo.png"
+              src="/nhai-logo.png"
               alt="NHAI"
               style={styles.logo}
               onError={(e) => {

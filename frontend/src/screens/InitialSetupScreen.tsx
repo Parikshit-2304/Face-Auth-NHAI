@@ -131,7 +131,7 @@ export const InitialSetupScreen: React.FC<InitialSetupScreenProps> = ({ onSetupC
         <div style={styles.cardHeader}>
           <div style={styles.logoBox}>
             <img
-              src="../src/assets/nhai-logo.png"
+              src="/nhai-logo.png"
               alt="NHAI"
               style={styles.logo}
               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
