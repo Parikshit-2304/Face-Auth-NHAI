@@ -187,6 +187,12 @@ class DatabaseService {
 
   // --- WORKER METHODS ---
   async addWorker(worker: Omit<WorkerRecord, 'sync_status'>): Promise<void> {
+    console.log(
+  "ADD WORKER CALLED",
+  worker.worker_id,
+  worker.name,
+  new Date().toISOString()
+);
     await this.init();
     
     // Encrypt embeddings

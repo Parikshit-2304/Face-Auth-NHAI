@@ -6,13 +6,143 @@ interface AdminDashboardProps {
   onNavigate: (screen: string) => void;
 }
 
+interface StatCardProps {
+  label: string;
+  value: React.ReactNode;
+  icon: string;
+  accent?: 'navy' | 'green' | 'red' | 'gold';
+  sub?: string;
+}
+
+const StatCard: React.FC<StatCardProps> = ({ label, value, icon, accent = 'navy', sub }) => {
+  const accentColors = {
+    navy: { bg: 'rgba(17,41,107,0.06)', icon: '#11296B', num: '#11296B' },
+    green: { bg: 'rgba(22,163,74,0.06)', icon: '#16A34A', num: '#16A34A' },
+    red: { bg: 'rgba(191,6,3,0.06)', icon: '#BF0603', num: '#BF0603' },
+    gold: { bg: 'rgba(255,203,5,0.10)', icon: '#92710A', num: '#92710A' },
+  }[accent];
+
+  return (
+    <div className="nhai-card" style={styles.statCard}>
+      <div style={{ ...styles.statIconBox, background: accentColors.bg }}>
+        <span className="material-symbols-outlined" style={{ color: accentColors.icon, fontSize: 20 }}>
+          {icon}
+        </span>
+      </div>
+      <div style={styles.statContent}>
+        <p style={styles.statLabel}>{label}</p>
+        <p style={{ ...styles.statValue, color: accentColors.num }}>{value}</p>
+        {sub && <p style={styles.statSub}>{sub}</p>}
+      </div>
+    </div>
+  );
+};
+
+interface ActionCardProps {
+  title: string;
+  description: string;
+  icon: string;
+  onClick: () => void;
+  variant?: 'default' | 'featured' | 'alert';
+  badge?: string;
+}
+
+const ActionCard: React.FC<ActionCardProps> = ({
+  title, description, icon, onClick, variant = 'default', badge
+}) => {
+  const isFeatured = variant === 'featured';
+  const isAlert = variant === 'alert';
+
+  return (
+    <div
+      className="nhai-card nhai-card-action"
+      onClick={onClick}
+      style={{
+        ...styles.actionCard,
+        ...(isFeatured ? styles.actionCardFeatured : {}),
+        ...(isAlert ? styles.actionCardAlert : {}),
+      }}
+    >
+      <div style={styles.actionCardTop}>
+        <div
+          style={{
+            ...styles.actionIconBox,
+            ...(isFeatured ? styles.actionIconBoxFeatured : {}),
+          }}
+        >
+          <span
+            className="material-symbols-outlined"
+            style={{
+              fontSize: 22,
+              color: isFeatured ? '#FFDB57' : '#11296B',
+            }}
+          >
+            {icon}
+          </span>
+        </div>
+        {badge && (
+          <div
+            className="nhai-badge"
+            style={{
+              ...(isAlert
+                ? { background: '#FEF2F2', color: '#BF0603', border: '1px solid #FECACA' }
+                : isFeatured
+                ? { background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.25)' }
+                : { background: 'rgba(22,163,74,0.10)', color: '#16A34A', border: '1px solid rgba(22,163,74,0.25)' }),
+            }}
+          >
+            {badge}
+          </div>
+        )}
+      </div>
+      <div style={styles.actionCardBody}>
+        <h3
+          style={{
+            ...styles.actionTitle,
+            color: isFeatured ? '#FFFFFF' : '#0D1B3E',
+          }}
+        >
+          {title}
+        </h3>
+        <p
+          style={{
+            ...styles.actionDesc,
+            color: isFeatured ? 'rgba(255,255,255,0.70)' : '#8892AB',
+          }}
+        >
+          {description}
+        </p>
+      </div>
+      <div style={styles.actionArrow}>
+        <span
+          className="material-symbols-outlined"
+          style={{
+            fontSize: 18,
+            color: isFeatured ? 'rgba(255,255,255,0.60)' : '#DDE1EC',
+          }}
+        >
+          arrow_forward
+        </span>
+      </div>
+    </div>
+  );
+};
+
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) => {
   const [stats, setStats] = useState({
     totalWorkers: 0,
     pendingSync: 0,
     unverifiedCount: 0,
-    isOnline: syncService.isDeviceOnline()
+    isOnline: syncService.isDeviceOnline(),
   });
+  const [greeting, setGreeting] = useState('');
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) setGreeting('Good morning');
+    else if (hour < 17) setGreeting('Good afternoon');
+    else setGreeting('Good evening');
+  }, []);
 
   useEffect(() => {
     const loadStats = async () => {
@@ -21,203 +151,384 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         const workers = await dbService.getAllWorkers();
         const queue = await dbService.getSyncQueue();
         const unverified = await dbService.getUnverifiedAttendance();
-        
         setStats({
           totalWorkers: workers.length,
           pendingSync: queue.length,
-          unverifiedCount: unverified.filter(u => u.review_status === 'pending').length,
-          isOnline: syncService.isDeviceOnline()
+          unverifiedCount: unverified.filter((u) => u.review_status === 'pending').length,
+          isOnline: syncService.isDeviceOnline(),
         });
-      } catch (e) {
-        console.error('Failed to load admin stats:', e);
-      }
+      } catch {}
     };
-
     loadStats();
-    const unsubscribe = syncService.subscribe(loadStats);
-    return () => unsubscribe();
+    const unsub = syncService.subscribe(loadStats);
+    return () => unsub();
   }, []);
 
   return (
-    <div className="flex flex-col gap-6 py-4">
-      {/* Page Title Header */}
-      <div className="flex justify-between items-center">
+    <div style={styles.page} className="fade-in">
+      {/* Page header */}
+      <div style={styles.pageHeader}>
         <div>
-          <h2 className="text-2xl font-black text-primary tracking-tight">ADMIN COMMAND CENTER</h2>
-          <p className="text-xs text-on-surface-variant">Gate Access Authorization & Biometric Registry</p>
-        </div>
-        <span className="px-3 py-1 bg-primary/10 border border-primary/20 text-primary rounded-full text-xs font-bold font-mono">
-          SECURE_NODE_ALPHA
-        </span>
-      </div>
-
-      {/* Stats Row */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-2xl flex items-center justify-between shadow-sm">
-          <div>
-            <p className="text-xs font-semibold text-outline tracking-wider uppercase">Workers Registered</p>
-            <p className="text-3xl font-black text-primary mt-1">{stats.totalWorkers}</p>
-          </div>
-          <span className="material-symbols-outlined text-primary/30 text-5xl">badge</span>
-        </div>
-
-        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-2xl flex items-center justify-between shadow-sm">
-          <div>
-            <p className="text-xs font-semibold text-outline tracking-wider uppercase">Pending Sync Queue</p>
-            <p className={`text-3xl font-black mt-1 ${stats.pendingSync > 0 ? 'text-error' : 'text-secondary'}`}>
-              {stats.pendingSync}
-            </p>
-          </div>
-          <span className="material-symbols-outlined text-error/30 text-5xl">cloud_sync</span>
-        </div>
-
-        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-2xl flex items-center justify-between shadow-sm">
-          <div>
-            <p className="text-xs font-semibold text-outline tracking-wider uppercase">Network Gateway</p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className={`h-3 w-3 rounded-full ${stats.isOnline ? 'bg-secondary animate-pulse' : 'bg-red-500 animate-pulse'}`}></span>
-              <p className="text-xl font-bold text-on-surface">{stats.isOnline ? 'Online' : 'Offline'}</p>
-            </div>
-          </div>
-          <span className="material-symbols-outlined text-outline/30 text-5xl">
-            {stats.isOnline ? 'wifi' : 'wifi_off'}
-          </span>
-        </div>
-      </section>
-
-      {/* Bento Grid Action Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-        {/* Sync Center (Featured Card) */}
-        <div 
-          onClick={() => onNavigate('sync_center')}
-          className="md:col-span-2 bg-primary text-white p-6 rounded-2xl shadow-md flex flex-col justify-between hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer group min-h-[160px]"
-        >
-          <div className="flex justify-between items-start">
-            <div className="bg-white/15 p-3 rounded-xl border border-white/10">
-              <span className="material-symbols-outlined text-3xl font-bold select-none" style={{ fontVariationSettings: "'FILL' 1" }}>
-                sync_lock
-              </span>
-            </div>
-            {stats.pendingSync > 0 ? (
-              <span className="text-[10px] font-bold bg-error text-white border border-red-500/30 px-3 py-1 rounded-full uppercase tracking-wider animate-pulse">
-                Action Required ({stats.pendingSync} pending)
-              </span>
-            ) : (
-              <span className="text-[10px] font-bold bg-secondary text-white px-3 py-1 rounded-full uppercase tracking-wider">
-                Sync Synced
-              </span>
-            )}
-          </div>
-          <div className="mt-4">
-            <h3 className="text-lg font-black tracking-tight mb-1 uppercase">Sync Center Monitor</h3>
-            <p className="text-xs opacity-75">Inspect queue logs, serialized payloads, and trigger manual synchronization to AWS endpoints.</p>
-          </div>
-        </div>
-
-        {/* Add Worker Wizard */}
-        <div 
-          onClick={() => onNavigate('add_worker')}
-          className="bg-white border border-outline-variant p-6 rounded-2xl flex flex-col justify-between hover:border-primary active:scale-[0.98] transition-all cursor-pointer group min-h-[160px] shadow-sm"
-        >
-          <div className="text-primary group-hover:scale-110 transition-transform duration-200">
-            <span className="material-symbols-outlined text-4xl">person_add</span>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-lg font-bold text-on-surface leading-tight">Enroll Worker</h3>
-            <p className="text-xs text-on-surface-variant mt-1">Register new field personnel offline with strict face quality and liveness gates.</p>
-          </div>
-        </div>
-
-        {/* Worker Directory */}
-        <div 
-          onClick={() => onNavigate('worker_directory')}
-          className="bg-white border border-outline-variant p-6 rounded-2xl flex flex-col justify-between hover:border-primary active:scale-[0.98] transition-all cursor-pointer group min-h-[160px] shadow-sm"
-        >
-          <div className="text-primary group-hover:scale-110 transition-transform duration-200">
-            <span className="material-symbols-outlined text-4xl">group</span>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-lg font-bold text-on-surface leading-tight">Worker Directory</h3>
-            <p className="text-xs text-on-surface-variant mt-1">Search, filter, and inspect enrolled biometrics templates and sync status.</p>
-          </div>
-        </div>
-
-        {/* Unverified Reviews */}
-        <div 
-          onClick={() => onNavigate('admin_review')}
-          className="bg-white border border-outline-variant p-6 rounded-2xl flex flex-col justify-between hover:border-primary active:scale-[0.98] transition-all cursor-pointer group min-h-[160px] shadow-sm"
-        >
-          <div className={`${stats.unverifiedCount > 0 ? 'text-error animate-pulse' : 'text-primary'} group-hover:scale-110 transition-transform duration-200`}>
-            <span className="material-symbols-outlined text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-              assignment_ind
-            </span>
-          </div>
-          <div className="mt-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-on-surface leading-tight">Review Logs</h3>
-              {stats.unverifiedCount > 0 && (
-                <span className="bg-error/10 text-error px-2 py-0.5 rounded text-[10px] font-bold uppercase">
-                  {stats.unverifiedCount} New
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-on-surface-variant mt-1">Audit unverified worker entries, manually approve/reject or link logs.</p>
-          </div>
-        </div>
-
-        {/* System Settings */}
-        <div 
-          onClick={() => onNavigate('settings')}
-          className="bg-white border border-outline-variant p-6 rounded-2xl flex flex-col justify-between hover:border-primary active:scale-[0.98] transition-all cursor-pointer group min-h-[160px] shadow-sm"
-        >
-          <div className="text-primary group-hover:scale-110 transition-transform duration-200">
-            <span className="material-symbols-outlined text-4xl">settings_applications</span>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-lg font-bold text-on-surface leading-tight">Config System</h3>
-            <p className="text-xs text-on-surface-variant mt-1">Configure cosine matching thresholds, lighting parameters, and purge settings.</p>
-          </div>
-        </div>
-        {/* User Management */}
-        <div 
-          onClick={() => onNavigate('user_management')}
-          className="bg-white border border-outline-variant p-6 rounded-2xl flex flex-col justify-between hover:border-primary active:scale-[0.98] transition-all cursor-pointer group min-h-[160px] shadow-sm"
-        >
-          <div className="text-primary group-hover:scale-110 transition-transform duration-200">
-            <span className="material-symbols-outlined text-4xl">people</span>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-lg font-bold text-on-surface leading-tight">User Management</h3>
-            <p className="text-xs text-on-surface-variant mt-1">Create, activate, deactivate users and manage role-based access permissions.</p>
-          </div>
-        </div>      </div>
-
-      {/* System Cryptographic Integrity Indicator */}
-      <div className="mt-4 bg-surface-container-high/60 rounded-2xl p-5 border border-outline-variant relative overflow-hidden shadow-sm">
-        <div className="relative z-10 flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-xl">shield_lock</span>
-            <h3 className="text-xs font-bold text-primary uppercase tracking-widest leading-none">Sealed Cryptographic Environment</h3>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <div className="flex items-center gap-1.5 bg-white border border-outline-variant px-3 py-1.5 rounded-full text-[10px] font-semibold text-on-surface shadow-sm">
-              <span className="material-symbols-outlined text-[14px] text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>verified_user</span>
-              <span>AES-256 local DB encryption</span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-white border border-outline-variant px-3 py-1.5 rounded-full text-[10px] font-semibold text-on-surface shadow-sm">
-              <span className="material-symbols-outlined text-[14px] text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>verified_user</span>
-              <span>Automatic 24h Purge Active</span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-white border border-outline-variant px-3 py-1.5 rounded-full text-[10px] font-semibold text-on-surface shadow-sm">
-              <span className="material-symbols-outlined text-[14px] text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>verified_user</span>
-              <span>Hardware acceleration enabled</span>
-            </div>
-          </div>
-          <p className="text-xs text-on-surface-variant leading-relaxed mt-1">
-            Biometric signatures (512D embeddings) are encrypted locally using AES-GCM before storage on the device filesystem. Raw capture photos are processed exclusively in-memory and are purged immediately.
+          <p style={styles.greetingText}>{greeting}, Admin</p>
+          <h2 style={styles.pageTitle}>Command Center</h2>
+          <p style={styles.pageSubtitle}>
+            Gate access control · Biometric registry · Workforce management
           </p>
         </div>
+        <div
+          className="nhai-badge nhai-badge-primary"
+          style={{ alignSelf: 'flex-start', marginTop: 4 }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
+            security
+          </span>
+          SECURE NODE α
+        </div>
+      </div>
+
+      {/* Metrics row */}
+      <div style={styles.statsGrid}>
+        <StatCard
+          label="Workers Enrolled"
+          value={stats.totalWorkers}
+          icon="badge"
+          accent="navy"
+          sub="On this device"
+        />
+        <StatCard
+          label="Pending Sync"
+          value={stats.pendingSync}
+          icon="cloud_sync"
+          accent={stats.pendingSync > 0 ? 'red' : 'green'}
+          sub={stats.pendingSync > 0 ? 'Needs upload' : 'All synced'}
+        />
+        <StatCard
+          label="Reviews"
+          value={stats.unverifiedCount}
+          icon="assignment_ind"
+          accent={stats.unverifiedCount > 0 ? 'red' : 'green'}
+          sub={stats.unverifiedCount > 0 ? 'Pending review' : 'No pending'}
+        />
+        <StatCard
+          label="Network"
+          value={
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: stats.isOnline ? '#16A34A' : '#BF0603',
+                  display: 'inline-block',
+                  boxShadow: stats.isOnline
+                    ? '0 0 0 3px rgba(22,163,74,0.20)'
+                    : '0 0 0 3px rgba(191,6,3,0.20)',
+                }}
+              />
+              {stats.isOnline ? 'Online' : 'Offline'}
+            </span>
+          }
+          icon={stats.isOnline ? 'wifi' : 'wifi_off'}
+          accent={stats.isOnline ? 'green' : 'red'}
+        />
+      </div>
+
+      {/* Primary actions */}
+      <div style={styles.sectionHeader}>
+        <h3 style={styles.sectionTitle}>Quick Actions</h3>
+      </div>
+
+      <div style={styles.actionsGrid}>
+        {/* Featured — Sync Center */}
+        <div style={{ gridColumn: '1 / -1' }}>
+          <ActionCard
+            title="Sync Center"
+            description="Inspect queue logs, serialized payloads, and trigger manual synchronization to AWS endpoints."
+            icon="sync_lock"
+            onClick={() => onNavigate('sync_center')}
+            variant="featured"
+            badge={stats.pendingSync > 0 ? `${stats.pendingSync} Pending` : 'All Synced'}
+          />
+        </div>
+
+        <ActionCard
+          title="Enroll Worker"
+          description="Register new field personnel offline with liveness and face quality gates."
+          icon="person_add"
+          onClick={() => onNavigate('add_worker')}
+        />
+        <ActionCard
+          title="Worker Directory"
+          description="Search, filter, and inspect enrolled biometric templates."
+          icon="group"
+          onClick={() => onNavigate('worker_directory')}
+        />
+        <ActionCard
+          title="Review Logs"
+          description="Audit unverified entries and approve or reject attendance records."
+          icon="fact_check"
+          onClick={() => onNavigate('admin_review')}
+          variant={stats.unverifiedCount > 0 ? 'alert' : 'default'}
+          badge={stats.unverifiedCount > 0 ? `${stats.unverifiedCount} New` : undefined}
+        />
+        <ActionCard
+          title="User Management"
+          description="Create and manage user accounts with role-based access control."
+          icon="manage_accounts"
+          onClick={() => onNavigate('user_management')}
+        />
+        <ActionCard
+          title="Settings"
+          description="Configure matching thresholds, liveness parameters, and cloud endpoints."
+          icon="settings"
+          onClick={() => onNavigate('settings')}
+        />
+      </div>
+
+      {/* Security status */}
+      <div
+        className="nhai-card"
+        style={{ ...styles.securityCard, marginTop: 8 }}
+      >
+        <div style={styles.securityHeader}>
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: 18, color: '#11296B' }}
+          >
+            shield_lock
+          </span>
+          <h3 style={styles.securityTitle}>Cryptographic Environment Status</h3>
+        </div>
+        <div style={styles.securityPills}>
+          {[
+            { icon: 'verified_user', text: 'AES-256 local DB encryption' },
+            { icon: 'schedule', text: 'Auto 24h purge active' },
+            { icon: 'memory', text: 'Hardware acceleration' },
+          ].map((item) => (
+            <div key={item.text} style={styles.securityPill}>
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 13, color: '#16A34A' }}
+              >
+                {item.icon}
+              </span>
+              <span style={styles.securityPillText}>{item.text}</span>
+            </div>
+          ))}
+        </div>
+        <p style={styles.securityNote}>
+          Biometric signatures (512D embeddings) are encrypted locally using AES-GCM before storage.
+          Raw capture frames are processed in-memory and purged immediately after verification.
+        </p>
       </div>
     </div>
   );
+};
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 20,
+    paddingBottom: 16,
+  },
+  pageHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 16,
+    paddingTop: 8,
+  },
+  greetingText: {
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: 13,
+    color: '#8892AB',
+    marginBottom: 2,
+  },
+  pageTitle: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontWeight: 800,
+    fontSize: 26,
+    color: '#0D1B3E',
+    lineHeight: 1.2,
+    margin: 0,
+  },
+  pageSubtitle: {
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: 12,
+    color: '#8892AB',
+    marginTop: 3,
+  },
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: 10,
+  },
+  statCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '14px 16px',
+  },
+  statIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  statContent: { flex: 1, minWidth: 0 },
+  statLabel: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontSize: 10,
+    fontWeight: 700,
+    color: '#8892AB',
+    letterSpacing: '0.07em',
+    textTransform: 'uppercase',
+    margin: 0,
+  },
+  statValue: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontWeight: 800,
+    fontSize: 22,
+    color: '#11296B',
+    lineHeight: 1.2,
+    margin: '2px 0 0',
+  },
+  statSub: {
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: 10,
+    color: '#8892AB',
+    margin: '1px 0 0',
+  },
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  sectionTitle: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontWeight: 700,
+    fontSize: 14,
+    color: '#4A5578',
+    letterSpacing: '0.03em',
+    textTransform: 'uppercase',
+    margin: 0,
+  },
+  actionsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: 10,
+  },
+  actionCard: {
+    padding: '20px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+    minHeight: 140,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  actionCardFeatured: {
+    background: 'linear-gradient(135deg, #11296B 0%, #00509D 100%)',
+    border: '1px solid rgba(255,255,255,0.10)',
+    boxShadow: '0 8px 32px rgba(17,41,107,0.25)',
+    minHeight: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: '20px 24px',
+  },
+  actionCardAlert: {
+    borderColor: 'rgba(191,6,3,0.20)',
+    background: '#FFFAFA',
+  },
+  actionCardTop: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  actionIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    background: 'rgba(17,41,107,0.07)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  actionIconBoxFeatured: {
+    background: 'rgba(255,255,255,0.12)',
+    border: '1px solid rgba(255,255,255,0.15)',
+  },
+  actionCardBody: { flex: 1 },
+  actionTitle: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontWeight: 700,
+    fontSize: 15,
+    color: '#0D1B3E',
+    margin: 0,
+    lineHeight: 1.3,
+  },
+  actionDesc: {
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: 12,
+    color: '#8892AB',
+    marginTop: 4,
+    lineHeight: 1.5,
+  },
+  actionArrow: {
+    alignSelf: 'flex-end',
+    marginTop: 'auto',
+  },
+  securityCard: {
+    padding: 20,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+  },
+  securityHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  securityTitle: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontWeight: 700,
+    fontSize: 13,
+    color: '#11296B',
+    margin: 0,
+    letterSpacing: '0.02em',
+  },
+  securityPills: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  securityPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    background: '#F0FDF4',
+    border: '1px solid #BBF7D0',
+    borderRadius: 999,
+    padding: '4px 10px',
+  },
+  securityPillText: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#16A34A',
+  },
+  securityNote: {
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: 12,
+    color: '#8892AB',
+    lineHeight: 1.6,
+    margin: 0,
+  },
 };

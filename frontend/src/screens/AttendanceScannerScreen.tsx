@@ -28,7 +28,6 @@ export const AttendanceScannerScreen: React.FC<AttendanceScannerScreenProps> = (
   const [saving, setSaving] = useState(false);
   const capturedRef = useRef(false);
 
-  // Pick a random liveness challenge or bypass if configured
   useEffect(() => {
     const bypass = localStorage.getItem('nhai_bypass_liveness') === 'true';
     if (bypass) {
@@ -39,7 +38,6 @@ export const AttendanceScannerScreen: React.FC<AttendanceScannerScreenProps> = (
     }
   }, [stage]);
 
-  // Load AI models on mount
   useEffect(() => {
     (async () => {
       try {
@@ -47,16 +45,13 @@ export const AttendanceScannerScreen: React.FC<AttendanceScannerScreenProps> = (
         await biometricService.loadMobileFaceNet();
         setModelsReady(true);
       } catch (e: any) {
-        console.error('Model loading failed', e);
         setStatusMsg('Failed to load biometric models: ' + (e?.message || String(e)));
       }
     })();
   }, []);
 
-  // Fast-path: look up worker by ID
   const handleFastPath = async () => {
     if (!workerIdInput.trim()) {
-      // Skip to global search mode
       setFastPathWorker(null);
       setStage('scanning');
       return;
@@ -68,37 +63,28 @@ export const AttendanceScannerScreen: React.FC<AttendanceScannerScreenProps> = (
         setStatusMsg(`Worker found: ${worker.name}. Starting scan…`);
       } else {
         setFastPathWorker(null);
-        setStatusMsg('Worker ID not found. Scanning in global search mode…');
+        setStatusMsg('Worker ID not found. Global search mode.');
       }
       setStage('scanning');
-    } catch (e) {
-      console.error(e);
-      setStatusMsg('Database error. Proceeding with global search…');
+    } catch {
       setStage('scanning');
     }
   };
 
-  // Handle camera capture callback
   const handleCapture = useCallback(async (video: HTMLVideoElement, detection: any) => {
     if (capturedRef.current || saving) return;
     capturedRef.current = true;
     setSaving(true);
     setStatusMsg('Processing biometric match…');
-
     const threshold = parseFloat(localStorage.getItem('nhai_match_threshold') || '0.85');
-
     try {
       const embedding = await biometricService.generateEmbedding(video, detection);
-
-      // If fast-path worker selected, compare only against that worker
       if (fastPathWorker) {
         const simFront = biometricService.calculateCosineSimilarity(embedding, fastPathWorker.embedding_front);
         const simLeft = biometricService.calculateCosineSimilarity(embedding, fastPathWorker.embedding_left);
         const simRight = biometricService.calculateCosineSimilarity(embedding, fastPathWorker.embedding_right);
         const bestSim = Math.max(simFront, simLeft, simRight);
-
         if (bestSim >= threshold) {
-          // Verified match
           await dbService.addAttendance({
             attendance_id: 'att_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
             worker_id: fastPathWorker.worker_id,
@@ -110,57 +96,41 @@ export const AttendanceScannerScreen: React.FC<AttendanceScannerScreenProps> = (
           });
           setResult({ matched: true, worker: fastPathWorker, similarity: bestSim, livenessPassed: true });
         } else {
-          // Below threshold — unverified
           await dbService.addUnverifiedAttendance({
             attendance_id: 'uatt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
-            embedding,
-            site_id: fastPathWorker.site_id,
-            timestamp: new Date().toISOString(),
+            embedding, site_id: fastPathWorker.site_id, timestamp: new Date().toISOString(),
           });
           setResult({ matched: false, similarity: bestSim, livenessPassed: true });
         }
       } else {
-        // Global search: compare against all workers
         const allWorkers = await dbService.getAllWorkers();
         let bestMatch: WorkerRecord | null = null;
         let bestSim = 0;
-
         for (const w of allWorkers) {
-          const simF = biometricService.calculateCosineSimilarity(embedding, w.embedding_front);
-          const simL = biometricService.calculateCosineSimilarity(embedding, w.embedding_left);
-          const simR = biometricService.calculateCosineSimilarity(embedding, w.embedding_right);
-          const best = Math.max(simF, simL, simR);
-          if (best > bestSim) {
-            bestSim = best;
-            bestMatch = w;
-          }
+          const best = Math.max(
+            biometricService.calculateCosineSimilarity(embedding, w.embedding_front),
+            biometricService.calculateCosineSimilarity(embedding, w.embedding_left),
+            biometricService.calculateCosineSimilarity(embedding, w.embedding_right)
+          );
+          if (best > bestSim) { bestSim = best; bestMatch = w; }
         }
-
         if (bestMatch && bestSim >= threshold) {
           await dbService.addAttendance({
             attendance_id: 'att_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
-            worker_id: bestMatch.worker_id,
-            site_id: bestMatch.site_id,
-            timestamp: new Date().toISOString(),
-            similarity_score: Math.round(bestSim * 100) / 100,
-            verified: 'Verified',
-            liveness_passed: true,
+            worker_id: bestMatch.worker_id, site_id: bestMatch.site_id, timestamp: new Date().toISOString(),
+            similarity_score: Math.round(bestSim * 100) / 100, verified: 'Verified', liveness_passed: true,
           });
           setResult({ matched: true, worker: bestMatch, similarity: bestSim, livenessPassed: true });
         } else {
           await dbService.addUnverifiedAttendance({
             attendance_id: 'uatt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
-            embedding,
-            site_id: 'unknown',
-            timestamp: new Date().toISOString(),
+            embedding, site_id: 'unknown', timestamp: new Date().toISOString(),
           });
           setResult({ matched: false, similarity: bestSim, livenessPassed: true });
         }
       }
-
       setStage('result');
-    } catch (e) {
-      console.error('Capture processing error:', e);
+    } catch {
       setStatusMsg('Error processing biometric data.');
       capturedRef.current = false;
     } finally {
@@ -177,75 +147,100 @@ export const AttendanceScannerScreen: React.FC<AttendanceScannerScreenProps> = (
     setStage('id_entry');
   };
 
-  // ─── RENDER ────────────────────────────────────────────────
+  // ── ID ENTRY ─────────────────────────────────────────────
   if (stage === 'id_entry') {
     return (
-      <div className="flex flex-col gap-6 py-4 max-w-lg mx-auto">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="p-2 rounded-xl hover:bg-surface-container-high transition cursor-pointer">
-            <span className="material-symbols-outlined text-on-surface">arrow_back</span>
+      <div style={styles.page} className="fade-in">
+        <div style={styles.screenHeader}>
+          <button onClick={onBack} style={styles.backBtn}>
+            <span className="material-symbols-outlined" style={{ fontSize: 20 }}>arrow_back</span>
           </button>
           <div>
-            <h2 className="text-2xl font-black text-primary tracking-tight">ATTENDANCE SCANNER</h2>
-            <p className="text-xs text-on-surface-variant">Biometric verification & attendance logging</p>
+            <h2 style={styles.screenTitle}>Attendance Scanner</h2>
+            <p style={styles.screenSub}>Biometric verification & attendance logging</p>
           </div>
         </div>
 
-        {/* Fast-path worker ID entry */}
-        <div className="bg-white border border-outline-variant p-6 rounded-2xl shadow-sm space-y-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="material-symbols-outlined text-primary">badge</span>
-            <h3 className="font-bold text-on-surface">Fast Path — Enter Worker ID</h3>
+        {/* Model status */}
+        <div style={{ ...styles.statusPill, background: modelsReady ? 'rgba(22,163,74,0.08)' : 'rgba(17,41,107,0.06)', border: `1px solid ${modelsReady ? 'rgba(22,163,74,0.25)' : 'rgba(17,41,107,0.15)'}` }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 14, color: modelsReady ? '#16A34A' : '#11296B', animation: modelsReady ? 'none' : 'spin 1.5s linear infinite' }}>
+            {modelsReady ? 'verified' : 'sync'}
+          </span>
+          <span style={{ ...styles.statusText, color: modelsReady ? '#16A34A' : '#11296B' }}>
+            {modelsReady ? 'Biometric AI engines ready' : 'Loading biometric models…'}
+          </span>
+        </div>
+
+        <div className="nhai-card" style={{ padding: 24 }}>
+          <div style={styles.formSectionHeader}>
+            <span className="material-symbols-outlined" style={{ fontSize: 18, color: '#11296B' }}>badge</span>
+            <div>
+              <h3 style={styles.formSectionTitle}>Fast Path Verification</h3>
+              <p style={styles.formSectionDesc}>
+                Enter a Worker ID for 1-to-1 matching, or skip for global search across all enrolled workers.
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-on-surface-variant">Enter a known Worker ID to compare against a single record, or leave blank for global search across all enrolled workers.</p>
-          <input
-            type="text"
-            value={workerIdInput}
-            onChange={e => setWorkerIdInput(e.target.value)}
-            placeholder="e.g. WRK-001 (optional)"
-            className="w-full px-4 py-3 border border-outline-variant rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
-          />
-          <div className="flex gap-3">
-            <button
-              onClick={handleFastPath}
-              disabled={!modelsReady}
-              className="flex-1 bg-primary text-white py-3 rounded-xl font-bold text-sm hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined text-lg">face</span>
-              {modelsReady ? 'Start Biometric Scan' : 'Loading Models…'}
-            </button>
-            <button
-              onClick={() => { setFastPathWorker(null); setStage('scanning'); }}
-              disabled={!modelsReady}
-              className="px-4 py-3 bg-surface-container-low border border-outline-variant text-on-surface rounded-xl font-bold text-sm hover:border-primary active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
-            >
-              Skip
-            </button>
+
+          <div style={{ marginTop: 16 }}>
+            <label className="nhai-label">Worker ID (Optional)</label>
+            <input
+              type="text"
+              value={workerIdInput}
+              onChange={(e) => setWorkerIdInput(e.target.value)}
+              placeholder="e.g. WRK-001A2B3C"
+              className="nhai-input"
+              style={{ marginBottom: 12 }}
+            />
+            <div style={styles.btnRow}>
+              <button
+                onClick={handleFastPath}
+                disabled={!modelsReady}
+                className="nhai-btn-primary"
+                style={{ flex: 2 }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>face_unlock</span>
+                {modelsReady ? 'Start Biometric Scan' : 'Loading…'}
+              </button>
+              <button
+                onClick={() => { setFastPathWorker(null); setStage('scanning'); }}
+                disabled={!modelsReady}
+                className="nhai-btn-secondary"
+                style={{ flex: 1 }}
+              >
+                Skip
+              </button>
+            </div>
           </div>
         </div>
 
         {statusMsg && (
-          <div className="text-xs text-center text-on-surface-variant bg-surface-container-low border border-outline-variant p-3 rounded-xl">
-            {statusMsg}
+          <div style={styles.infoBox}>
+            <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#4A5578' }}>info</span>
+            <span style={styles.infoText}>{statusMsg}</span>
           </div>
         )}
       </div>
     );
   }
 
+  // ── SCANNING ─────────────────────────────────────────────
   if (stage === 'scanning') {
     return (
-      <div className="flex flex-col gap-4 py-4 max-w-lg mx-auto">
-        <div className="flex items-center gap-3">
-          <button onClick={resetScanner} className="p-2 rounded-xl hover:bg-surface-container-high transition cursor-pointer">
-            <span className="material-symbols-outlined text-on-surface">arrow_back</span>
+      <div style={styles.page} className="fade-in">
+        <div style={styles.screenHeader}>
+          <button onClick={resetScanner} style={styles.backBtn}>
+            <span className="material-symbols-outlined" style={{ fontSize: 20 }}>arrow_back</span>
           </button>
-          <div>
-            <h2 className="text-lg font-black text-primary tracking-tight">SCANNING</h2>
-            <p className="text-xs text-on-surface-variant">
-              {fastPathWorker ? `Matching against: ${fastPathWorker.name}` : 'Global search across all enrolled workers'}
+          <div style={{ flex: 1 }}>
+            <h2 style={styles.screenTitle}>Live Scan</h2>
+            <p style={styles.screenSub}>
+              {fastPathWorker ? `Matching: ${fastPathWorker.name}` : 'Global search — all enrolled workers'}
             </p>
           </div>
+          {fastPathWorker && (
+            <div className="nhai-badge nhai-badge-primary">{fastPathWorker.worker_id}</div>
+          )}
         </div>
 
         <CameraViewfinder
@@ -256,76 +251,169 @@ export const AttendanceScannerScreen: React.FC<AttendanceScannerScreenProps> = (
         />
 
         {saving && (
-          <div className="flex items-center justify-center gap-2 text-primary text-sm font-semibold animate-pulse">
-            <span className="material-symbols-outlined animate-spin">sync</span>
-            Processing biometric match…
+          <div style={styles.processingCard}>
+            <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#11296B', animation: 'spin 1s linear infinite' }}>sync</span>
+            <span style={styles.processingText}>Processing biometric match…</span>
           </div>
         )}
       </div>
     );
   }
 
-  // Result stage
+  // ── RESULT ────────────────────────────────────────────────
+  const isMatch = result?.matched;
   return (
-    <div className="flex flex-col gap-6 py-4 max-w-lg mx-auto items-center">
-      {result?.matched ? (
-        <div className="w-full bg-white border-2 border-secondary p-8 rounded-3xl shadow-lg text-center space-y-4">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-secondary/10 border-2 border-secondary">
-            <span className="material-symbols-outlined text-secondary text-5xl" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-          </div>
-          <h2 className="text-2xl font-black text-secondary">VERIFIED</h2>
-          <p className="text-on-surface font-bold text-lg">{result.worker?.name}</p>
-          <div className="flex justify-center gap-6 text-xs text-on-surface-variant">
-            <div>
-              <p className="font-semibold text-outline uppercase tracking-wider">Worker ID</p>
-              <p className="font-bold text-on-surface mt-0.5">{result.worker?.worker_id}</p>
-            </div>
-            <div>
-              <p className="font-semibold text-outline uppercase tracking-wider">Similarity</p>
-              <p className="font-bold text-secondary mt-0.5">{(result.similarity * 100).toFixed(1)}%</p>
-            </div>
-            <div>
-              <p className="font-semibold text-outline uppercase tracking-wider">Site</p>
-              <p className="font-bold text-on-surface mt-0.5">{result.worker?.site_id}</p>
-            </div>
-          </div>
-          <div className="text-[10px] text-on-surface-variant bg-secondary/5 border border-secondary/20 px-3 py-1.5 rounded-full inline-block">
-            Attendance logged at {new Date().toLocaleTimeString()}
-          </div>
+    <div style={styles.page} className="fade-in">
+      <div style={styles.screenHeader}>
+        <button onClick={resetScanner} style={styles.backBtn}>
+          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>arrow_back</span>
+        </button>
+        <h2 style={styles.screenTitle}>Scan Result</h2>
+      </div>
+
+      {/* Result card */}
+      <div
+        className="nhai-card"
+        style={{
+          ...styles.resultCard,
+          borderColor: isMatch ? '#BBF7D0' : '#FECACA',
+          background: isMatch ? '#F0FDF4' : '#FEF2F2',
+        }}
+      >
+        {/* Result icon */}
+        <div
+          style={{
+            ...styles.resultIconRing,
+            background: isMatch ? 'rgba(22,163,74,0.10)' : 'rgba(191,6,3,0.10)',
+            border: `2px solid ${isMatch ? '#BBF7D0' : '#FECACA'}`,
+          }}
+        >
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: 48, color: isMatch ? '#16A34A' : '#BF0603' }}
+          >
+            {isMatch ? 'how_to_reg' : 'warning'}
+          </span>
         </div>
-      ) : (
-        <div className="w-full bg-white border-2 border-error p-8 rounded-3xl shadow-lg text-center space-y-4">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-error/10 border-2 border-error">
-            <span className="material-symbols-outlined text-error text-5xl" style={{ fontVariationSettings: "'FILL' 1" }}>warning</span>
-          </div>
-          <h2 className="text-2xl font-black text-error">UNVERIFIED</h2>
-          <p className="text-on-surface-variant text-sm">
+
+        <h2
+          style={{
+            ...styles.resultTitle,
+            color: isMatch ? '#16A34A' : '#BF0603',
+          }}
+        >
+          {isMatch ? 'VERIFIED' : 'UNVERIFIED'}
+        </h2>
+
+        {isMatch && result?.worker && (
+          <p style={styles.resultWorkerName}>{result.worker.name}</p>
+        )}
+        {!isMatch && (
+          <p style={styles.resultDesc}>
             No matching worker found above threshold ({Math.round(parseFloat(localStorage.getItem('nhai_match_threshold') || '0.85') * 100)}%).
           </p>
-          <p className="text-xs text-on-surface-variant">
-            Best similarity: <span className="font-bold text-error">{((result?.similarity ?? 0) * 100).toFixed(1)}%</span>
-          </p>
-          <div className="text-[10px] text-on-surface-variant bg-error/5 border border-error/20 px-3 py-1.5 rounded-full inline-block">
-            Submitted for Admin Review
-          </div>
-        </div>
-      )}
+        )}
 
-      <div className="flex gap-3 w-full max-w-xs">
-        <button
-          onClick={resetScanner}
-          className="flex-1 bg-primary text-white py-3 rounded-xl font-bold text-sm hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
+        {/* Stats */}
+        <div style={styles.resultStats}>
+          {isMatch && result?.worker && (
+            <>
+              <div style={styles.resultStat}>
+                <span style={styles.resultStatLabel}>Worker ID</span>
+                <span style={styles.resultStatValue}>{result.worker.worker_id}</span>
+              </div>
+              <div style={styles.resultStatDivider} />
+            </>
+          )}
+          <div style={styles.resultStat}>
+            <span style={styles.resultStatLabel}>Similarity</span>
+            <span
+              style={{
+                ...styles.resultStatValue,
+                color: isMatch ? '#16A34A' : '#BF0603',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+            >
+              {((result?.similarity ?? 0) * 100).toFixed(1)}%
+            </span>
+          </div>
+          {isMatch && result?.worker && (
+            <>
+              <div style={styles.resultStatDivider} />
+              <div style={styles.resultStat}>
+                <span style={styles.resultStatLabel}>Site</span>
+                <span style={styles.resultStatValue}>{result.worker.site_id}</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Status tag */}
+        <div
+          style={{
+            ...styles.resultTag,
+            background: isMatch ? 'rgba(22,163,74,0.08)' : 'rgba(191,6,3,0.08)',
+            border: `1px solid ${isMatch ? 'rgba(22,163,74,0.20)' : 'rgba(191,6,3,0.20)'}`,
+            color: isMatch ? '#16A34A' : '#BF0603',
+          }}
         >
-          <span className="material-symbols-outlined text-lg">refresh</span>
+          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
+            {isMatch ? 'schedule' : 'assignment_late'}
+          </span>
+          <span style={styles.resultTagText}>
+            {isMatch
+              ? `Attendance logged at ${new Date().toLocaleTimeString()}`
+              : 'Submitted for Admin Review'}
+          </span>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div style={styles.btnRow}>
+        <button onClick={resetScanner} className="nhai-btn-primary" style={{ flex: 1 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>refresh</span>
           Scan Another
         </button>
-        <button
-          onClick={onBack}
-          className="px-5 py-3 bg-surface-container-low border border-outline-variant text-on-surface rounded-xl font-bold text-sm hover:border-primary active:scale-[0.98] transition-all cursor-pointer"
-        >
+        <button onClick={onBack} className="nhai-btn-secondary" style={{ flex: 1 }}>
           Done
         </button>
       </div>
     </div>
   );
+};
+
+const styles: Record<string, React.CSSProperties> = {
+  page: { display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 16, paddingTop: 8 },
+  screenHeader: { display: 'flex', alignItems: 'center', gap: 12 },
+  backBtn: {
+    width: 40, height: 40, borderRadius: 12, background: '#F7F8FC', border: '1px solid #DDE1EC',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, color: '#0D1B3E',
+  },
+  screenTitle: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: 20, color: '#0D1B3E', margin: 0 },
+  screenSub: { fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#8892AB', marginTop: 2 },
+  statusPill: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10 },
+  statusText: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, fontWeight: 600 },
+  formSectionHeader: { display: 'flex', alignItems: 'flex-start', gap: 12 },
+  formSectionTitle: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 15, color: '#0D1B3E', margin: 0 },
+  formSectionDesc: { fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#8892AB', marginTop: 3, lineHeight: 1.5 },
+  btnRow: { display: 'flex', gap: 10 },
+  infoBox: { display: 'flex', alignItems: 'center', gap: 8, background: '#F7F8FC', border: '1px solid #DDE1EC', borderRadius: 10, padding: '10px 14px' },
+  infoText: { fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#4A5578' },
+  processingCard: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+    background: 'rgba(17,41,107,0.05)', border: '1px solid rgba(17,41,107,0.12)', borderRadius: 12, padding: '12px 20px',
+  },
+  processingText: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 600, color: '#11296B' },
+  resultCard: { padding: 28, borderRadius: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, textAlign: 'center' },
+  resultIconRing: { width: 88, height: 88, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  resultTitle: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: 28, letterSpacing: '0.03em', margin: 0 },
+  resultWorkerName: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 18, color: '#0D1B3E', margin: 0 },
+  resultDesc: { fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: '#4A5578', margin: 0, maxWidth: 280 },
+  resultStats: { display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(255,255,255,0.60)', border: '1px solid rgba(255,255,255,0.80)', borderRadius: 12, padding: '12px 20px', flexWrap: 'wrap', justifyContent: 'center' },
+  resultStat: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 },
+  resultStatLabel: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, fontWeight: 700, color: '#8892AB', letterSpacing: '0.07em', textTransform: 'uppercase' },
+  resultStatValue: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, color: '#0D1B3E' },
+  resultStatDivider: { width: 1, height: 28, background: 'rgba(0,0,0,0.10)' },
+  resultTag: { display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 999 },
+  resultTagText: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, fontWeight: 600 },
 };

@@ -1,14 +1,55 @@
-### ReactNative.Node Stack ###
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-.pnpm-debug.log*
-
 **/node_modules
 sync_engine
 ai_models
 database
+
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Android build artifacts
+android/.gradle/
+android/build/
+android/app/build/
+
+# Capacitor generated files
+android/captures/
+
+# Ignore all APKs by default
+*.apk
+
+# Keep only the hackathon APK
+!APK/
+!APK/app-debug.apk
+
+# Ignore videos
+*.mp4
+*.mov
+*.avi
+
+# Temporary files
+*.tmp
+*.temp

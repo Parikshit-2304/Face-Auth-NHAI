@@ -11,7 +11,7 @@ export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ onNavi
     todayAttendanceCount: 0,
     pendingSyncCount: 0,
     totalWorkers: 0,
-    isOnline: syncService.isDeviceOnline()
+    isOnline: syncService.isDeviceOnline(),
   });
 
   useEffect(() => {
@@ -21,139 +21,403 @@ export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ onNavi
         const attendance = await dbService.getAllAttendance();
         const queue = await dbService.getSyncQueue();
         const workers = await dbService.getAllWorkers();
-        
-        // Count verified logs today
         const todayStr = new Date().toDateString();
         const todayCount = attendance.filter(
-          a => new Date(a.timestamp).toDateString() === todayStr && a.verified === 'Verified'
+          (a) => new Date(a.timestamp).toDateString() === todayStr && a.verified === 'Verified'
         ).length;
-
         setStats({
           todayAttendanceCount: todayCount,
           pendingSyncCount: queue.length,
           totalWorkers: workers.length,
-          isOnline: syncService.isDeviceOnline()
+          isOnline: syncService.isDeviceOnline(),
         });
-      } catch (e) {
-        console.error('Failed to load supervisor stats:', e);
-      }
+      } catch {}
     };
-
     loadStats();
-    const unsubscribe = syncService.subscribe(loadStats);
-    return () => unsubscribe();
+    const unsub = syncService.subscribe(loadStats);
+    return () => unsub();
   }, []);
 
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const dateStr = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+
   return (
-    <div className="flex flex-col gap-6 py-4">
-      {/* Context/Shift Info Header */}
-      <div className="bg-surface-container-low border border-outline-variant p-4 rounded-2xl flex flex-col sm:flex-row justify-between sm:items-center gap-3 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center text-primary border border-primary/20">
-            <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+    <div style={styles.page} className="fade-in">
+      {/* Header */}
+      <div style={styles.pageHeader}>
+        <div>
+          <p style={styles.dateLine}>{dateStr}</p>
+          <h2 style={styles.pageTitle}>Supervisor View</h2>
+        </div>
+        <div style={styles.timeBadge}>
+          <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#11296B' }}>schedule</span>
+          <span style={styles.timeText}>{timeStr}</span>
+        </div>
+      </div>
+
+      {/* Site context */}
+      <div className="nhai-card" style={styles.siteCard}>
+        <div style={styles.siteLeft}>
+          <div style={styles.siteIconBox}>
+            <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#11296B' }}>
               location_on
             </span>
           </div>
           <div>
-            <h3 className="font-extrabold text-sm uppercase tracking-wider text-primary">Active Site: Remote Alpha</h3>
-            <p className="text-xs text-on-surface-variant">Shift: Morning (06:00 AM - 02:00 PM)</p>
+            <p style={styles.siteLabel}>Active Site</p>
+            <p style={styles.siteName}>Remote Alpha</p>
+            <p style={styles.shiftLabel}>Morning Shift · 06:00 AM – 02:00 PM</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 bg-white border border-outline-variant px-3 py-1.5 rounded-full shadow-sm text-xs font-semibold w-fit self-end">
-          <span className="material-symbols-outlined text-sm animate-pulse text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>
-            schedule
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: stats.isOnline ? '#16A34A' : '#BF0603',
+              boxShadow: stats.isOnline
+                ? '0 0 0 3px rgba(22,163,74,0.20)'
+                : '0 0 0 3px rgba(191,6,3,0.20)',
+            }}
+          />
+          <span
+            style={{
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
+              fontSize: 12,
+              fontWeight: 700,
+              color: stats.isOnline ? '#16A34A' : '#BF0603',
+            }}
+          >
+            {stats.isOnline ? 'Online' : 'Offline'}
           </span>
-          <span>Shift Supervisor: Marcus Thorne</span>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-outline-variant p-4 rounded-2xl flex items-center justify-between shadow-sm">
-          <div>
-            <p className="text-xs font-semibold text-outline tracking-wider uppercase">Marked Today</p>
-            <p className="text-3xl font-black text-primary mt-1">{stats.todayAttendanceCount}</p>
-          </div>
-          <span className="material-symbols-outlined text-primary/30 text-5xl">how_to_reg</span>
-        </div>
-
-        <div className="bg-white border border-outline-variant p-4 rounded-2xl flex items-center justify-between shadow-sm">
-          <div>
-            <p className="text-xs font-semibold text-outline tracking-wider uppercase">Pending Uploads</p>
-            <p className={`text-3xl font-black mt-1 ${stats.pendingSyncCount > 0 ? 'text-red-500 animate-pulse' : 'text-secondary'}`}>
-              {stats.pendingSyncCount}
-            </p>
-          </div>
-          <span className="material-symbols-outlined text-error/30 text-5xl">cloud_queue</span>
-        </div>
-
-        <div className="bg-white border border-outline-variant p-4 rounded-2xl flex items-center justify-between shadow-sm">
-          <div>
-            <p className="text-xs font-semibold text-outline tracking-wider uppercase">Auth Mode</p>
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className={`h-2.5 w-2.5 rounded-full ${stats.isOnline ? 'bg-secondary animate-pulse' : 'bg-red-500 animate-pulse'}`}></span>
-              <p className="text-xl font-bold">{stats.isOnline ? 'ONLINE' : 'LOCAL ONLY'}</p>
+      {/* Stats row */}
+      <div style={styles.statsGrid}>
+        {[
+          {
+            label: 'Scanned Today',
+            value: stats.todayAttendanceCount,
+            icon: 'how_to_reg',
+            color: '#11296B',
+            bg: 'rgba(17,41,107,0.06)',
+          },
+          {
+            label: 'Pending Upload',
+            value: stats.pendingSyncCount,
+            icon: 'cloud_upload',
+            color: stats.pendingSyncCount > 0 ? '#BF0603' : '#16A34A',
+            bg:
+              stats.pendingSyncCount > 0
+                ? 'rgba(191,6,3,0.06)'
+                : 'rgba(22,163,74,0.06)',
+          },
+          {
+            label: 'Total Workers',
+            value: stats.totalWorkers,
+            icon: 'groups',
+            color: '#00509D',
+            bg: 'rgba(0,80,157,0.06)',
+          },
+        ].map((s) => (
+          <div key={s.label} className="nhai-card" style={styles.statCard}>
+            <div style={{ ...styles.statIcon, background: s.bg }}>
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 20, color: s.color }}
+              >
+                {s.icon}
+              </span>
             </div>
+            <p style={{ ...styles.statValue, color: s.color }}>{s.value}</p>
+            <p style={styles.statLabel}>{s.label}</p>
           </div>
-          <span className="material-symbols-outlined text-outline/30 text-5xl">
-            {stats.isOnline ? 'cloud_done' : 'cloud_off'}
-          </span>
-        </div>
-      </section>
+        ))}
+      </div>
 
-      {/* Large Featured verification trigger card */}
-      <div 
+      {/* Primary CTA — Biometric scan */}
+      <button
         onClick={() => onNavigate('attendance_scanner')}
-        className="w-full bg-primary text-white p-6 rounded-3xl shadow-lg flex flex-col justify-between hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer group min-h-[180px] border border-white/10"
+        style={styles.scanCTA}
       >
-        <div className="flex justify-between items-start">
-          <div className="bg-white/15 p-4 rounded-2xl border border-white/10">
-            <span className="material-symbols-outlined text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+        <div style={styles.scanCTALeft}>
+          <div style={styles.scanCTAIcon}>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 32, color: '#FFDB57' }}
+            >
               face_unlock
             </span>
           </div>
-          <span className="bg-white/20 border border-white/10 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider">
-            Start Scanner
+          <div>
+            <h3 style={styles.scanCTATitle}>Verify Personnel</h3>
+            <p style={styles.scanCTADesc}>
+              Run biometric scan to log attendance. Real-time liveness and similarity comparison in under 1 second.
+            </p>
+          </div>
+        </div>
+        <div style={styles.scanCTAArrow}>
+          <span className="material-symbols-outlined" style={{ fontSize: 22, color: 'rgba(255,255,255,0.60)' }}>
+            arrow_forward
           </span>
         </div>
-        <div className="mt-6">
-          <h3 className="text-xl font-black tracking-tight uppercase leading-none mb-1">Verify Personnel</h3>
-          <p className="text-xs opacity-80 max-w-[480px]">
-            Run biometric scan to log attendance. Real-time liveness and similarity comparison are executed locally in &lt;1 second.
-          </p>
-        </div>
-      </div>
+      </button>
 
-      {/* Action Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Enrolled directory */}
-        <div 
-          onClick={() => onNavigate('worker_directory')}
-          className="bg-white border border-outline-variant p-5 rounded-2xl flex items-center gap-4 hover:border-primary active:scale-[0.98] transition-all cursor-pointer shadow-sm group"
-        >
-          <div className="p-3 bg-primary/10 rounded-xl text-primary group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-3xl font-bold">folder_shared</span>
+      {/* Secondary actions */}
+      <div style={styles.actionsRow}>
+        {[
+          {
+            title: 'Worker Directory',
+            desc: `${stats.totalWorkers} workers enrolled`,
+            icon: 'folder_shared',
+            screen: 'worker_directory',
+          },
+          {
+            title: 'Verification Logs',
+            desc: 'Audit scan history and scores',
+            icon: 'history',
+            screen: 'settings',
+          },
+        ].map((a) => (
+          <div
+            key={a.title}
+            className="nhai-card nhai-card-action"
+            onClick={() => onNavigate(a.screen)}
+            style={styles.actionCard}
+          >
+            <div style={styles.actionIconBox}>
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 20, color: '#11296B' }}
+              >
+                {a.icon}
+              </span>
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={styles.actionTitle}>{a.title}</p>
+              <p style={styles.actionDesc}>{a.desc}</p>
+            </div>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 18, color: '#DDE1EC' }}
+            >
+              chevron_right
+            </span>
           </div>
-          <div>
-            <h3 className="font-bold text-base text-on-surface leading-tight">Worker Directory</h3>
-            <p className="text-xs text-on-surface-variant mt-0.5">Search and view details of workers enrolled on this device ({stats.totalWorkers}).</p>
-          </div>
-        </div>
-
-        {/* History logs */}
-        <div 
-          onClick={() => onNavigate('settings')} // Can point to history or settings, let's configure settings or similar logs
-          className="bg-white border border-outline-variant p-5 rounded-2xl flex items-center gap-4 hover:border-primary active:scale-[0.98] transition-all cursor-pointer shadow-sm group"
-        >
-          <div className="p-3 bg-primary/10 rounded-xl text-primary group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-3xl font-bold">history</span>
-          </div>
-          <div>
-            <h3 className="font-bold text-base text-on-surface leading-tight">Verification Logs</h3>
-            <p className="text-xs text-on-surface-variant mt-0.5">Audit details of local face scans, liveness failures, and matching scores.</p>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );
+};
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 16,
+    paddingBottom: 16,
+  },
+  pageHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingTop: 8,
+  },
+  dateLine: {
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: 12,
+    color: '#8892AB',
+    marginBottom: 2,
+  },
+  pageTitle: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontWeight: 800,
+    fontSize: 26,
+    color: '#0D1B3E',
+    margin: 0,
+  },
+  timeBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    background: '#F7F8FC',
+    border: '1px solid #DDE1EC',
+    borderRadius: 10,
+    padding: '6px 12px',
+  },
+  timeText: {
+    fontFamily: "'JetBrains Mono', monospace",
+    fontWeight: 600,
+    fontSize: 13,
+    color: '#11296B',
+  },
+  siteCard: {
+    padding: '14px 18px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  siteLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+  },
+  siteIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    background: 'rgba(17,41,107,0.06)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  siteLabel: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontSize: 10,
+    fontWeight: 700,
+    color: '#8892AB',
+    letterSpacing: '0.07em',
+    textTransform: 'uppercase',
+    margin: 0,
+  },
+  siteName: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontWeight: 800,
+    fontSize: 15,
+    color: '#0D1B3E',
+    margin: '2px 0 0',
+  },
+  shiftLabel: {
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: 11,
+    color: '#8892AB',
+    marginTop: 1,
+  },
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: 10,
+  },
+  statCard: {
+    padding: '16px 14px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 8,
+    textAlign: 'center',
+  },
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statValue: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontWeight: 800,
+    fontSize: 26,
+    lineHeight: 1,
+    margin: 0,
+  },
+  statLabel: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontSize: 10,
+    fontWeight: 600,
+    color: '#8892AB',
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+    margin: 0,
+    textAlign: 'center',
+  },
+  scanCTA: {
+    width: '100%',
+    background: 'linear-gradient(135deg, #11296B 0%, #00509D 100%)',
+    border: 'none',
+    borderRadius: 20,
+    padding: '20px 24px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+    boxShadow: '0 8px 32px rgba(17,41,107,0.25)',
+    transition: 'all 0.15s',
+    textAlign: 'left',
+  },
+  scanCTALeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 16,
+    flex: 1,
+  },
+  scanCTAIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    background: 'rgba(255,255,255,0.10)',
+    border: '1px solid rgba(255,255,255,0.15)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  scanCTATitle: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontWeight: 800,
+    fontSize: 18,
+    color: '#FFFFFF',
+    margin: 0,
+    lineHeight: 1.2,
+  },
+  scanCTADesc: {
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.65)',
+    marginTop: 5,
+    lineHeight: 1.5,
+  },
+  scanCTAArrow: {
+    flexShrink: 0,
+  },
+  actionsRow: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  actionCard: {
+    padding: '14px 18px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+  },
+  actionIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    background: 'rgba(17,41,107,0.06)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  actionTitle: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontWeight: 700,
+    fontSize: 14,
+    color: '#0D1B3E',
+    margin: 0,
+  },
+  actionDesc: {
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: 12,
+    color: '#8892AB',
+    marginTop: 2,
+  },
 };

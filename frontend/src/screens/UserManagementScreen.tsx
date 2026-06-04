@@ -8,12 +8,17 @@ interface UserManagementScreenProps {
   currentUser: { user_id: string; username: string; role: string };
 }
 
+const roleConfig = {
+  admin: { bg: '#FEF2F2', color: '#BF0603', border: '#FECACA', label: 'Admin' },
+  supervisor: { bg: 'rgba(17,41,107,0.06)', color: '#11296B', border: 'rgba(17,41,107,0.15)', label: 'Supervisor' },
+  worker: { bg: '#F0FDF4', color: '#16A34A', border: '#BBF7D0', label: 'Worker' },
+} as const;
+
 export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBack, currentUser }) => {
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
 
   const [formData, setFormData] = useState({
     username: '',
@@ -21,12 +26,10 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
     confirmPassword: '',
     full_name: '',
     email: '',
-    role: 'supervisor' as 'admin' | 'supervisor' | 'worker'
+    role: 'supervisor' as 'admin' | 'supervisor' | 'worker',
   });
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
+  useEffect(() => { loadUsers(); }, []);
 
   const loadUsers = async () => {
     try {
@@ -45,36 +48,18 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-
     try {
-      if (!formData.username || !formData.password || !formData.full_name) {
+      if (!formData.username || !formData.password || !formData.full_name)
         throw new Error('Please fill in all required fields');
-      }
-
-      if (formData.password !== formData.confirmPassword) {
+      if (formData.password !== formData.confirmPassword)
         throw new Error('Passwords do not match');
-      }
-
-      // Check if user already exists
       const existingUser = await dbService.getUserByUsername(formData.username);
-      if (existingUser) {
-        throw new Error('Username already exists');
-      }
-
-      // Create new user
+      if (existingUser) throw new Error('Username already exists');
       const newUser = await authService.createUserAccount(
-        formData.username,
-        formData.password,
-        formData.role,
-        {
-          full_name: formData.full_name,
-          email: formData.email || undefined
-        }
+        formData.username, formData.password, formData.role,
+        { full_name: formData.full_name, email: formData.email || undefined },
       );
-
       await dbService.addUser(newUser);
-
-      // Reload users
       await loadUsers();
       setShowAddForm(false);
       resetForm();
@@ -84,15 +69,8 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) {
-      return;
-    }
-
-    if (userId === currentUser.user_id) {
-      setError('You cannot delete your own account');
-      return;
-    }
-
+    if (!window.confirm('Are you sure you want to delete this user?')) return;
+    if (userId === currentUser.user_id) { setError('You cannot delete your own account'); return; }
     try {
       setError(null);
       await dbService.deleteUser(userId);
@@ -105,11 +83,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
   const handleToggleStatus = async (user: UserAccount) => {
     try {
       setError(null);
-      const updatedUser = {
-        ...user,
-        is_active: !user.is_active,
-        updated_at: new Date().toISOString()
-      };
+      const updatedUser = { ...user, is_active: !user.is_active, updated_at: new Date().toISOString() };
       await dbService.updateUser(updatedUser);
       await loadUsers();
     } catch (err) {
@@ -118,81 +92,84 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
   };
 
   const resetForm = () => {
-    setFormData({
-      username: '',
-      password: '',
-      confirmPassword: '',
-      full_name: '',
-      email: '',
-      role: 'supervisor'
-    });
-    setEditingUser(null);
+    setFormData({ username: '', password: '', confirmPassword: '', full_name: '', email: '', role: 'supervisor' });
   };
 
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'admin': return 'text-red-600 bg-red-100';
-      case 'supervisor': return 'text-blue-600 bg-blue-100';
-      case 'worker': return 'text-green-600 bg-green-100';
-      default: return 'text-gray-600 bg-gray-100';
-    }
-  };
+  const getInitials = (name: string) =>
+    name.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase() || '??';
 
   return (
-    <div className="flex-grow flex flex-col h-full">
+    <div style={styles.page} className="fade-in">
       {/* Header */}
-      <div className="px-4 py-4 bg-surface-container-highest border-b border-outline-variant">
-        <div className="flex items-center justify-between mb-2">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors"
-          >
-            <span className="material-symbols-outlined">arrow_back</span>
-            <span className="text-sm font-semibold">Back</span>
-          </button>
-          <button
-            onClick={() => {
-              resetForm();
-              setShowAddForm(true);
-            }}
-            className="flex items-center gap-2 bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-primary/90 transition-colors"
-          >
-            <span className="material-symbols-outlined text-lg">add</span>
-            Add User
-          </button>
+      <div style={styles.header}>
+        <button onClick={onBack} style={styles.backBtn}>
+          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>arrow_back</span>
+        </button>
+        <div style={{ flex: 1 }}>
+          <h2 style={styles.title}>User Management</h2>
+          <p style={styles.subtitle}>Manage accounts and role-based access control</p>
         </div>
-        <h2 className="text-xl font-bold text-on-surface">User Management</h2>
+        <button
+          onClick={() => { resetForm(); setShowAddForm(true); }}
+          className="nhai-btn-primary"
+          style={{ padding: '8px 16px', fontSize: 12 }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>add</span>
+          Add User
+        </button>
       </div>
 
-      {/* Error Message */}
+      {/* Error */}
       {error && (
-        <div className="mx-4 mt-4 text-xs text-error font-semibold bg-error-container/20 border border-error/20 p-2.5 rounded-lg">
-          {error}
+        <div style={styles.errorBox} className="fade-in">
+          <span className="material-symbols-outlined" style={{ fontSize: 15, color: '#BF0603' }}>error</span>
+          <span style={styles.errorText}>{error}</span>
+          <button onClick={() => setError(null)} style={styles.errorClose}>
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+          </button>
         </div>
       )}
 
-      {/* Add/Edit Form */}
+      {/* Add user form */}
       {showAddForm && (
-        <div className="mx-4 mt-4 bg-surface-container border border-outline-variant p-4 rounded-lg">
-          <h3 className="text-sm font-bold mb-3">Add New User</h3>
-          <form onSubmit={handleAddUser} className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] font-semibold text-on-surface-variant uppercase">Full Name</label>
+        <div className="nhai-card" style={styles.addFormCard} id="add-user-form">
+          <div style={styles.addFormHeader}>
+            <div style={styles.addFormIconBox}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18, color: '#11296B' }}>
+                person_add
+              </span>
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={styles.addFormTitle}>Add New User</p>
+              <p style={styles.addFormSubtitle}>Create a new account with role-based access</p>
+            </div>
+            <button
+              onClick={() => { setShowAddForm(false); resetForm(); }}
+              style={styles.closeFormBtn}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+            </button>
+          </div>
+
+          <form onSubmit={handleAddUser} style={styles.addForm}>
+            {/* Row 1 */}
+            <div style={styles.formGrid}>
+              <div style={styles.formField}>
+                <label className="nhai-label">Full Name *</label>
                 <input
                   type="text"
                   value={formData.full_name}
                   onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                   placeholder="John Doe"
-                  className="w-full px-2 py-1.5 border border-outline rounded text-xs"
+                  className="nhai-input"
                 />
               </div>
-              <div>
-                <label className="text-[10px] font-semibold text-on-surface-variant uppercase">Role</label>
+              <div style={styles.formField}>
+                <label className="nhai-label">Role</label>
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
-                  className="w-full px-2 py-1.5 border border-outline rounded text-xs"
+                  className="nhai-input"
                 >
                   <option value="supervisor">Supervisor</option>
                   <option value="admin">Admin</option>
@@ -200,130 +177,257 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
               </div>
             </div>
 
-            <div>
-              <label className="text-[10px] font-semibold text-on-surface-variant uppercase">Email</label>
+            {/* Email */}
+            <div style={styles.formField}>
+              <label className="nhai-label">Email (Optional)</label>
               <input
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="john@example.com"
-                className="w-full px-2 py-1.5 border border-outline rounded text-xs"
+                className="nhai-input"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] font-semibold text-on-surface-variant uppercase">Username</label>
+            {/* Row 2 */}
+            <div style={styles.formGrid}>
+              <div style={styles.formField}>
+                <label className="nhai-label">Username *</label>
                 <input
                   type="text"
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                   placeholder="username"
-                  className="w-full px-2 py-1.5 border border-outline rounded text-xs"
+                  className="nhai-input"
                 />
               </div>
-              <div>
-                <label className="text-[10px] font-semibold text-on-surface-variant uppercase">Password</label>
+              <div style={styles.formField}>
+                <label className="nhai-label">Password *</label>
                 <input
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder="••••••"
-                  className="w-full px-2 py-1.5 border border-outline rounded text-xs"
+                  className="nhai-input"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="text-[10px] font-semibold text-on-surface-variant uppercase">Confirm Password</label>
+            <div style={styles.formField}>
+              <label className="nhai-label">Confirm Password *</label>
               <input
                 type="password"
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                 placeholder="••••••"
-                className="w-full px-2 py-1.5 border border-outline rounded text-xs"
+                className="nhai-input"
               />
             </div>
 
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                className="flex-1 bg-primary text-on-primary py-1.5 rounded text-xs font-semibold hover:bg-primary/90"
-              >
-                Create User
-              </button>
+            <div style={styles.formActions}>
               <button
                 type="button"
-                onClick={() => {
-                  setShowAddForm(false);
-                  resetForm();
-                }}
-                className="flex-1 bg-surface-container-highest border border-outline text-on-surface py-1.5 rounded text-xs font-semibold hover:bg-surface-container"
+                onClick={() => { setShowAddForm(false); resetForm(); }}
+                className="nhai-btn-secondary"
+                style={{ flex: 1 }}
               >
                 Cancel
+              </button>
+              <button type="submit" className="nhai-btn-primary" style={{ flex: 2 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>person_add</span>
+                Create User
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Users List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {loading ? (
-          <div className="text-center py-8 text-on-surface-variant">Loading users...</div>
-        ) : users.length === 0 ? (
-          <div className="text-center py-8 text-on-surface-variant">No users found</div>
-        ) : (
-          users.map((user) => (
-            <div
-              key={user.user_id}
-              className="bg-surface-container border border-outline-variant p-3 rounded-lg space-y-2"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-sm">{user.full_name || user.username}</h3>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${getRoleColor(user.role)}`}>
-                      {user.role.toUpperCase()}
-                    </span>
-                    {!user.is_active && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded text-gray-600 bg-gray-200">
-                        INACTIVE
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-on-surface-variant">@{user.username}</p>
-                  {user.email && <p className="text-[10px] text-on-surface-variant">{user.email}</p>}
-                  <p className="text-[10px] text-on-surface-variant">
-                    Created: {new Date(user.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleToggleStatus(user)}
-                  className={`flex-1 text-xs font-semibold py-1.5 rounded transition-colors ${
-                    user.is_active
-                      ? 'bg-yellow-100 text-yellow-600 hover:bg-yellow-200'
-                      : 'bg-green-100 text-green-600 hover:bg-green-200'
-                  }`}
-                >
-                  {user.is_active ? 'Deactivate' : 'Activate'}
-                </button>
-                {user.user_id !== currentUser.user_id && (
-                  <button
-                    onClick={() => handleDeleteUser(user.user_id)}
-                    className="flex-1 bg-error-container text-error text-xs font-semibold py-1.5 rounded hover:bg-error/20 transition-colors"
-                  >
-                    Delete
-                  </button>
-                )}
+      {/* Users list */}
+      {loading ? (
+        <div style={styles.list}>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="nhai-card" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div className="skeleton" style={{ width: 44, height: 44, borderRadius: 12 }} />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div className="skeleton" style={{ height: 14, width: '55%', borderRadius: 6 }} />
+                <div className="skeleton" style={{ height: 11, width: '35%', borderRadius: 6 }} />
               </div>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      ) : users.length === 0 ? (
+        <div style={styles.emptyState}>
+          <div style={styles.emptyIcon}>
+            <span className="material-symbols-outlined" style={{ fontSize: 34, color: '#DDE1EC' }}>group</span>
+          </div>
+          <p style={styles.emptyTitle}>No users found</p>
+          <p style={styles.emptyDesc}>Create your first user account to get started.</p>
+        </div>
+      ) : (
+        <div style={styles.list}>
+          {users.map((user) => {
+            const role = user.role as keyof typeof roleConfig;
+            const rc = roleConfig[role] ?? roleConfig.worker;
+            const isSelf = user.user_id === currentUser.user_id;
+            const initials = getInitials(user.full_name || user.username);
+
+            return (
+              <div key={user.user_id} className="nhai-card" style={styles.userCard}>
+                {/* Avatar + Info */}
+                <div style={styles.userRow}>
+                  <div
+                    style={{
+                      ...styles.userAvatar,
+                      background: rc.bg,
+                      border: `1.5px solid ${rc.border}`,
+                    }}
+                  >
+                    <span
+                      style={{
+                        ...styles.userAvatarText,
+                        color: rc.color,
+                      }}
+                    >
+                      {initials}
+                    </span>
+                  </div>
+
+                  <div style={styles.userInfo}>
+                    <div style={styles.userNameRow}>
+                      <p style={styles.userName}>{user.full_name || user.username}</p>
+                      <span
+                        className="nhai-badge"
+                        style={{ background: rc.bg, color: rc.color, border: `1px solid ${rc.border}` }}
+                      >
+                        {rc.label}
+                      </span>
+                      {!user.is_active && (
+                        <span className="nhai-badge" style={{ background: '#F7F8FC', color: '#8892AB', border: '1px solid #DDE1EC' }}>
+                          Inactive
+                        </span>
+                      )}
+                      {isSelf && (
+                        <span className="nhai-badge nhai-badge-gold">You</span>
+                      )}
+                    </div>
+                    <p style={styles.userUsername}>@{user.username}</p>
+                    <div style={styles.userMetaRow}>
+                      {user.email && (
+                        <span style={styles.userMeta}>
+                          <span className="material-symbols-outlined" style={{ fontSize: 12 }}>mail</span>
+                          {user.email}
+                        </span>
+                      )}
+                      <span style={styles.userMeta}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 12 }}>calendar_today</span>
+                        Joined {new Date(user.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                {!isSelf && (
+                  <div style={styles.userActions}>
+                    <button
+                      onClick={() => handleToggleStatus(user)}
+                      style={{
+                        ...styles.actionBtn,
+                        background: user.is_active ? '#FFFBEB' : '#F0FDF4',
+                        color: user.is_active ? '#D97706' : '#16A34A',
+                        border: `1px solid ${user.is_active ? '#FDE68A' : '#BBF7D0'}`,
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                        {user.is_active ? 'pause_circle' : 'play_circle'}
+                      </span>
+                      {user.is_active ? 'Deactivate' : 'Activate'}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(user.user_id)}
+                      style={{
+                        ...styles.actionBtn,
+                        background: '#FEF2F2',
+                        color: '#BF0603',
+                        border: '1px solid #FECACA',
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete</span>
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
+};
+
+const styles: Record<string, React.CSSProperties> = {
+  page: { display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 16, paddingTop: 8 },
+  header: { display: 'flex', alignItems: 'center', gap: 12 },
+  backBtn: {
+    width: 40, height: 40, borderRadius: 12, background: '#F7F8FC', border: '1px solid #DDE1EC',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, color: '#0D1B3E',
+  },
+  title: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: 22, color: '#0D1B3E', margin: 0 },
+  subtitle: { fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#8892AB', marginTop: 2 },
+  errorBox: {
+    display: 'flex', alignItems: 'center', gap: 8, background: '#FEF2F2',
+    border: '1px solid #FECACA', borderRadius: 10, padding: '10px 14px',
+  },
+  errorText: { fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#BF0603', fontWeight: 500, flex: 1 },
+  errorClose: { background: 'none', border: 'none', cursor: 'pointer', color: '#BF0603', display: 'flex', alignItems: 'center', padding: 0 },
+  addFormCard: { padding: '20px 22px' },
+  addFormHeader: { display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 18 },
+  addFormIconBox: {
+    width: 40, height: 40, borderRadius: 12, background: 'rgba(17,41,107,0.06)', border: '1px solid rgba(17,41,107,0.12)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  addFormTitle: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 15, color: '#0D1B3E', margin: 0 },
+  addFormSubtitle: { fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#8892AB', marginTop: 2 },
+  closeFormBtn: {
+    width: 32, height: 32, borderRadius: 8, background: '#F7F8FC', border: '1px solid #DDE1EC',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#8892AB', flexShrink: 0,
+  },
+  addForm: { display: 'flex', flexDirection: 'column', gap: 12 },
+  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 },
+  formField: { display: 'flex', flexDirection: 'column' },
+  formActions: { display: 'flex', gap: 10, marginTop: 4 },
+  emptyState: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    padding: '48px 24px', gap: 10, textAlign: 'center',
+  },
+  emptyIcon: {
+    width: 72, height: 72, borderRadius: '50%', background: '#F7F8FC', border: '1px solid #DDE1EC',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  emptyTitle: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 16, color: '#4A5578', margin: 0 },
+  emptyDesc: { fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#8892AB', margin: 0, maxWidth: 280, lineHeight: 1.5 },
+  list: { display: 'flex', flexDirection: 'column', gap: 10 },
+  userCard: { padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 },
+  userRow: { display: 'flex', alignItems: 'flex-start', gap: 12 },
+  userAvatar: {
+    width: 44, height: 44, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  userAvatarText: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: 15, lineHeight: 1 },
+  userInfo: { flex: 1, minWidth: 0 },
+  userNameRow: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  userName: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, color: '#0D1B3E', margin: 0 },
+  userUsername: { fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#8892AB', marginTop: 2 },
+  userMetaRow: { display: 'flex', gap: 12, marginTop: 4, flexWrap: 'wrap' },
+  userMeta: {
+    display: 'flex', alignItems: 'center', gap: 4,
+    fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: '#8892AB',
+  },
+  userActions: { display: 'flex', gap: 8, paddingTop: 10, borderTop: '1px solid #EEF0F8' },
+  actionBtn: {
+    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+    border: 'none', borderRadius: 10, padding: '8px 12px', cursor: 'pointer',
+    fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, fontWeight: 700,
+    transition: 'all 0.15s',
+  },
 };

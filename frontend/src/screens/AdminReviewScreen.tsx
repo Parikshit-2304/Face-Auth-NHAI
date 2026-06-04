@@ -5,15 +5,33 @@ interface AdminReviewScreenProps {
   onBack: () => void;
 }
 
+type FilterType = 'all' | 'pending' | 'approved' | 'rejected';
+
+const statusConfig = {
+  pending: {
+    bg: '#FFFBEB', border: '#FDE68A', color: '#D97706',
+    icon: 'schedule', badge: { background: '#FFFBEB', color: '#D97706', border: '1px solid #FDE68A' },
+    rowBg: '#FFFCF4',
+  },
+  approved: {
+    bg: '#F0FDF4', border: '#BBF7D0', color: '#16A34A',
+    icon: 'check_circle', badge: { background: '#F0FDF4', color: '#16A34A', border: '1px solid #BBF7D0' },
+    rowBg: '#F0FDF4',
+  },
+  rejected: {
+    bg: '#FEF2F2', border: '#FECACA', color: '#BF0603',
+    icon: 'cancel', badge: { background: '#FEF2F2', color: '#BF0603', border: '1px solid #FECACA' },
+    rowBg: '#FEF8F8',
+  },
+} as const;
+
 export const AdminReviewScreen: React.FC<AdminReviewScreenProps> = ({ onBack }) => {
   const [records, setRecords] = useState<UnverifiedAttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
+  const [filter, setFilter] = useState<FilterType>('pending');
 
-  useEffect(() => {
-    loadRecords();
-  }, []);
+  useEffect(() => { loadRecords(); }, []);
 
   const loadRecords = async () => {
     setLoading(true);
@@ -40,149 +58,316 @@ export const AdminReviewScreen: React.FC<AdminReviewScreenProps> = ({ onBack }) 
     }
   };
 
-  const filtered = records.filter(r => filter === 'all' || r.review_status === filter);
-
-  const pendingCount = records.filter(r => r.review_status === 'pending').length;
-  const approvedCount = records.filter(r => r.review_status === 'approved').length;
-  const rejectedCount = records.filter(r => r.review_status === 'rejected').length;
+  const filtered = records.filter((r) => filter === 'all' || r.review_status === filter);
+  const counts = {
+    pending: records.filter((r) => r.review_status === 'pending').length,
+    approved: records.filter((r) => r.review_status === 'approved').length,
+    rejected: records.filter((r) => r.review_status === 'rejected').length,
+  };
 
   return (
-    <div className="flex flex-col gap-4 py-4">
+    <div style={styles.page} className="fade-in">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <button onClick={onBack} className="p-2 rounded-xl hover:bg-surface-container-high transition cursor-pointer">
-          <span className="material-symbols-outlined text-on-surface">arrow_back</span>
+      <div style={styles.header}>
+        <button onClick={onBack} style={styles.backBtn}>
+          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>arrow_back</span>
         </button>
-        <div className="flex-1">
-          <h2 className="text-2xl font-black text-primary tracking-tight">ADMIN REVIEW</h2>
-          <p className="text-xs text-on-surface-variant">Audit unverified attendance entries</p>
+        <div style={{ flex: 1 }}>
+          <h2 style={styles.title}>Admin Review</h2>
+          <p style={styles.subtitle}>Audit and adjudicate unverified attendance entries</p>
         </div>
+        <button onClick={loadRecords} style={styles.refreshBtn}>
+          <span className="material-symbols-outlined" style={{ fontSize: 18, color: '#11296B' }}>refresh</span>
+        </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-center">
-          <p className="text-2xl font-black text-amber-600">{pendingCount}</p>
-          <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider">Pending</p>
-        </div>
-        <div className="bg-green-50 border border-green-200 p-3 rounded-xl text-center">
-          <p className="text-2xl font-black text-green-600">{approvedCount}</p>
-          <p className="text-[10px] font-semibold text-green-700 uppercase tracking-wider">Approved</p>
-        </div>
-        <div className="bg-red-50 border border-red-200 p-3 rounded-xl text-center">
-          <p className="text-2xl font-black text-red-600">{rejectedCount}</p>
-          <p className="text-[10px] font-semibold text-red-700 uppercase tracking-wider">Rejected</p>
-        </div>
+      {/* Stats row */}
+      <div style={styles.statsRow}>
+        {([
+          { key: 'pending', label: 'Pending Review', icon: 'schedule' },
+          { key: 'approved', label: 'Approved', icon: 'check_circle' },
+          { key: 'rejected', label: 'Rejected', icon: 'cancel' },
+        ] as const).map(({ key, label, icon }) => {
+          const cfg = statusConfig[key];
+          return (
+            <div
+              key={key}
+              style={{
+                ...styles.statCard,
+                background: cfg.bg,
+                border: `1px solid ${cfg.border}`,
+              }}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 18, color: cfg.color }}
+              >
+                {icon}
+              </span>
+              <div>
+                <p style={{ ...styles.statNum, color: cfg.color }}>{counts[key]}</p>
+                <p style={{ ...styles.statLabel, color: cfg.color }}>{label}</p>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex gap-1 bg-surface-container-low border border-outline-variant rounded-xl p-1">
-        {(['pending', 'approved', 'rejected', 'all'] as const).map(f => (
+      {/* Filter tabs */}
+      <div style={styles.filterTabs}>
+        {(['pending', 'approved', 'rejected', 'all'] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition cursor-pointer ${
-              filter === f
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-on-surface-variant hover:bg-surface-container-high'
-            }`}
+            style={{
+              ...styles.filterTab,
+              ...(filter === f ? styles.filterTabActive : styles.filterTabInactive),
+            }}
           >
-            {f}
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+            {f !== 'all' && counts[f as keyof typeof counts] > 0 && (
+              <span
+                style={{
+                  ...styles.filterBadge,
+                  background: filter === f ? 'rgba(255,255,255,0.20)' : '#EDEFF5',
+                  color: filter === f ? 'white' : '#4A5578',
+                }}
+              >
+                {counts[f as keyof typeof counts]}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
       {/* Records */}
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-on-surface-variant">
-          <span className="material-symbols-outlined animate-spin mr-2">sync</span>
-          Loading records…
+        <div style={styles.loadingState}>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="nhai-card" style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div className="skeleton" style={{ width: 40, height: 40, borderRadius: '50%' }} />
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div className="skeleton" style={{ height: 14, width: '50%', borderRadius: 6 }} />
+                  <div className="skeleton" style={{ height: 11, width: '70%', borderRadius: 6 }} />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <span className="material-symbols-outlined text-5xl text-outline/40 mb-3">fact_check</span>
-          <p className="font-semibold text-on-surface-variant">
+        <div style={styles.emptyState}>
+          <div style={styles.emptyIcon}>
+            <span className="material-symbols-outlined" style={{ fontSize: 34, color: '#DDE1EC' }}>
+              {records.length === 0 ? 'fact_check' : 'filter_list_off'}
+            </span>
+          </div>
+          <p style={styles.emptyTitle}>
             {records.length === 0 ? 'No unverified entries' : `No ${filter} entries`}
           </p>
-          <p className="text-xs text-outline mt-1">
-            {records.length === 0 ? 'All attendance scans have been matched successfully.' : 'Try changing the filter above.'}
+          <p style={styles.emptyDesc}>
+            {records.length === 0
+              ? 'All attendance scans have been matched successfully.'
+              : 'Try changing the filter above.'}
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {filtered.map(r => (
-            <div key={r.attendance_id} className="bg-white border border-outline-variant rounded-2xl p-4 shadow-sm">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
-                    r.review_status === 'pending' ? 'bg-amber-100 text-amber-600' :
-                    r.review_status === 'approved' ? 'bg-green-100 text-green-600' :
-                    'bg-red-100 text-red-600'
-                  }`}>
-                    <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                      {r.review_status === 'pending' ? 'pending' : r.review_status === 'approved' ? 'check_circle' : 'cancel'}
+        <div style={styles.list}>
+          {filtered.map((r) => {
+            const cfg = statusConfig[r.review_status as keyof typeof statusConfig] || statusConfig.pending;
+            const isProcessing = processingId === r.attendance_id;
+
+            return (
+              <div
+                key={r.attendance_id}
+                className="nhai-card"
+                style={{ overflow: 'hidden' }}
+              >
+                {/* Status stripe */}
+                <div style={{ height: 3, background: cfg.color, opacity: 0.60 }} />
+
+                <div style={{ padding: '14px 18px' }}>
+                  {/* Top row */}
+                  <div style={styles.recordTop}>
+                    <div style={styles.recordLeft}>
+                      <div
+                        style={{
+                          ...styles.recordStatusIcon,
+                          background: cfg.bg,
+                          border: `1px solid ${cfg.border}`,
+                        }}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: 18, color: cfg.color }}
+                        >
+                          {cfg.icon}
+                        </span>
+                      </div>
+                      <div>
+                        <p style={styles.recordTitle}>Unverified Entry</p>
+                        <p style={styles.recordId}>{r.attendance_id}</p>
+                      </div>
+                    </div>
+                    <span
+                      className="nhai-badge"
+                      style={cfg.badge}
+                    >
+                      {r.review_status}
                     </span>
                   </div>
-                  <div>
-                    <p className="font-bold text-on-surface text-sm">Unverified Entry</p>
-                    <p className="text-[10px] text-on-surface-variant font-mono">{r.attendance_id}</p>
+
+                  {/* Details grid */}
+                  <div style={styles.detailGrid}>
+                    <div style={styles.detailItem}>
+                      <p style={styles.detailLabel}>Site</p>
+                      <p style={styles.detailValue}>{r.site_id}</p>
+                    </div>
+                    <div style={styles.detailItem}>
+                      <p style={styles.detailLabel}>Timestamp</p>
+                      <p style={styles.detailValue}>{new Date(r.timestamp).toLocaleString()}</p>
+                    </div>
+                    <div style={styles.detailItem}>
+                      <p style={styles.detailLabel}>Embedding</p>
+                      <p style={{ ...styles.detailValue, color: '#11296B' }}>
+                        {r.embedding.length}D ✓
+                      </p>
+                    </div>
+                    {r.reviewed_by && (
+                      <div style={styles.detailItem}>
+                        <p style={styles.detailLabel}>Reviewed By</p>
+                        <p style={styles.detailValue}>{r.reviewed_by}</p>
+                      </div>
+                    )}
                   </div>
+
+                  {r.reviewed_by && r.reviewed_at && (
+                    <p style={styles.reviewedAt}>
+                      Reviewed at {new Date(r.reviewed_at).toLocaleString()}
+                    </p>
+                  )}
+
+                  {/* Action buttons */}
+                  {r.review_status === 'pending' && (
+                    <div style={styles.actionRow}>
+                      <button
+                        onClick={() => handleReview(r.attendance_id, 'approved')}
+                        disabled={isProcessing}
+                        style={{
+                          ...styles.actionBtn,
+                          background: '#16A34A',
+                          opacity: isProcessing ? 0.6 : 1,
+                        }}
+                      >
+                        {isProcessing ? (
+                          <span
+                            className="material-symbols-outlined"
+                            style={{ fontSize: 15, animation: 'spin 1s linear infinite' }}
+                          >
+                            sync
+                          </span>
+                        ) : (
+                          <span className="material-symbols-outlined" style={{ fontSize: 15 }}>check</span>
+                        )}
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleReview(r.attendance_id, 'rejected')}
+                        disabled={isProcessing}
+                        style={{
+                          ...styles.actionBtn,
+                          background: '#BF0603',
+                          opacity: isProcessing ? 0.6 : 1,
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 15 }}>close</span>
+                        Reject
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                  r.review_status === 'pending' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
-                  r.review_status === 'approved' ? 'bg-green-100 text-green-700 border border-green-200' :
-                  'bg-red-100 text-red-700 border border-red-200'
-                }`}>
-                  {r.review_status}
-                </span>
               </div>
-
-              <div className="grid grid-cols-3 gap-2 mt-3 text-xs">
-                <div>
-                  <p className="font-semibold text-outline uppercase tracking-wider">Site</p>
-                  <p className="font-bold text-on-surface mt-0.5">{r.site_id}</p>
-                </div>
-                <div>
-                  <p className="font-semibold text-outline uppercase tracking-wider">Timestamp</p>
-                  <p className="font-bold text-on-surface mt-0.5">{new Date(r.timestamp).toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="font-semibold text-outline uppercase tracking-wider">Embedding</p>
-                  <p className="font-bold text-primary mt-0.5">{r.embedding.length}D ✓</p>
-                </div>
-              </div>
-
-              {r.reviewed_by && (
-                <div className="mt-2 text-[10px] text-on-surface-variant">
-                  Reviewed by <span className="font-bold">{r.reviewed_by}</span> at {r.reviewed_at ? new Date(r.reviewed_at).toLocaleString() : '—'}
-                </div>
-              )}
-
-              {/* Action buttons for pending items */}
-              {r.review_status === 'pending' && (
-                <div className="flex gap-2 mt-3">
-                  <button
-                    onClick={() => handleReview(r.attendance_id, 'approved')}
-                    disabled={processingId === r.attendance_id}
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-green-700 active:scale-[0.98] transition cursor-pointer disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined text-sm">check</span>
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => handleReview(r.attendance_id, 'rejected')}
-                    disabled={processingId === r.attendance_id}
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-red-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-red-700 active:scale-[0.98] transition cursor-pointer disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined text-sm">close</span>
-                    Reject
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
+};
+
+const styles: Record<string, React.CSSProperties> = {
+  page: { display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 16, paddingTop: 8 },
+  header: { display: 'flex', alignItems: 'center', gap: 12 },
+  backBtn: {
+    width: 40, height: 40, borderRadius: 12, background: '#F7F8FC', border: '1px solid #DDE1EC',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, color: '#0D1B3E',
+  },
+  title: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: 22, color: '#0D1B3E', margin: 0 },
+  subtitle: { fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#8892AB', marginTop: 2 },
+  refreshBtn: {
+    width: 40, height: 40, borderRadius: 12, background: '#F7F8FC', border: '1px solid #DDE1EC',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
+  },
+  statsRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 },
+  statCard: {
+    borderRadius: 16, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10,
+  },
+  statNum: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: 22, margin: 0, lineHeight: 1,
+  },
+  statLabel: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, fontWeight: 600, margin: '2px 0 0',
+    letterSpacing: '0.03em',
+  },
+  filterTabs: {
+    display: 'flex', gap: 4, background: '#F7F8FC', border: '1px solid #DDE1EC',
+    borderRadius: 14, padding: 4,
+  },
+  filterTab: {
+    flex: 1, padding: '8px 6px', borderRadius: 10, border: 'none', cursor: 'pointer',
+    fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, fontWeight: 700,
+    letterSpacing: '0.04em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+    transition: 'all 0.15s',
+  },
+  filterTabActive: { background: '#11296B', color: 'white', boxShadow: '0 2px 8px rgba(17,41,107,0.20)' },
+  filterTabInactive: { background: 'transparent', color: '#8892AB' },
+  filterBadge: {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    minWidth: 18, height: 18, borderRadius: 999,
+    fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, fontWeight: 700, padding: '0 4px',
+  },
+  loadingState: { display: 'flex', flexDirection: 'column', gap: 10 },
+  emptyState: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    padding: '48px 24px', gap: 10, textAlign: 'center',
+  },
+  emptyIcon: {
+    width: 72, height: 72, borderRadius: '50%', background: '#F7F8FC', border: '1px solid #DDE1EC',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  emptyTitle: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 16, color: '#4A5578', margin: 0 },
+  emptyDesc: { fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#8892AB', margin: 0, maxWidth: 280, lineHeight: 1.5 },
+  list: { display: 'flex', flexDirection: 'column', gap: 10 },
+  recordTop: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 },
+  recordLeft: { display: 'flex', alignItems: 'center', gap: 10 },
+  recordStatusIcon: {
+    width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  recordTitle: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, color: '#0D1B3E', margin: 0 },
+  recordId: { fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#8892AB', marginTop: 2 },
+  detailGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px 20px', marginBottom: 8 },
+  detailItem: {},
+  detailLabel: {
+    fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, fontWeight: 700, color: '#8892AB',
+    letterSpacing: '0.07em', textTransform: 'uppercase', margin: 0,
+  },
+  detailValue: { fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 13, color: '#0D1B3E', marginTop: 2 },
+  reviewedAt: { fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: '#8892AB', marginBottom: 8 },
+  actionRow: { display: 'flex', gap: 8, marginTop: 10 },
+  actionBtn: {
+    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+    color: 'white', border: 'none', borderRadius: 10, padding: '9px 12px', cursor: 'pointer',
+    fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, fontWeight: 700,
+    transition: 'all 0.15s',
+  },
 };
